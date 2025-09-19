@@ -1,3 +1,15 @@
+## Defaults and modes (harmonized)
+
+| Mode | Audio handling | Image handling | Beat effects | Mask usage |
+|---|---|---|---|---|
+| Default (classic) | Merge all audio files in the folder into one long track | Shuffle-loop all images to fill duration | Not applicable | Background/foreground visual tweaks (e.g., BG blur/BW, FG sharpen/saturate) |
+| Option: per-audio | One video per audio file | Shuffle-loop images to match that audio | Not applicable | Same as classic |
+| Beat-matched | One audio file (or merged) drives cut plan | Images mapped to planned durations | Pulse/bloom/counters at beats | Mask gates beat effects to FG/BG (alphamerge+overlay); transitions not masked |
+
+Notes:
+- Transitions are not masked; masking applies to overlays/effects.
+- For beat-matched mode, masking confines beat pulses/bloom to FG/BG only; for classic mode, masking applies stylistic splits (e.g., blur only background).
+
 ## Beat-Aligned Slideshow (`beatslides`) - Command Reference
 
 ### Synopsis

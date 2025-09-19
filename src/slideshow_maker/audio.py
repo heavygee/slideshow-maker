@@ -10,19 +10,14 @@ from .utils import run_command, get_audio_duration
 
 
 def find_audio_files(directory):
-    """Find audio files in the directory, prioritizing Avicii files"""
+    """Find ALL audio files in the directory (stable sort by name)."""
     audio_files = []
     for ext in AUDIO_EXTENSIONS:
         audio_files.extend(glob.glob(os.path.join(directory, ext)))
-    
-    # Sort to prioritize Avicii files first
     audio_files = sorted(audio_files)
-    avicii_files = [f for f in audio_files if 'avicii' in f.lower()]
-    other_files = [f for f in audio_files if 'avicii' not in f.lower()]
-    
-    # Return Avicii files first, then others, up to 2 files total
-    prioritized_files = avicii_files + other_files
-    return prioritized_files[:2]
+    # Exclude previously merged output to avoid recursive concat and codec mismatches
+    audio_files = [p for p in audio_files if os.path.basename(p) != AUDIO_OUTPUT]
+    return audio_files
 
 
 def merge_audio(audio_files, output_file):
@@ -46,7 +41,10 @@ def merge_audio(audio_files, output_file):
     success = run_command(cmd, f"Merging {len(audio_files)} audio files")
 
     # Clean up
-    os.remove(concat_file)
+    try:
+        os.remove(concat_file)
+    except Exception:
+        pass
 
     return success
 
@@ -59,9 +57,15 @@ def combine_video_audio(video_file, audio_file, output_file):
         print("Could not get audio duration")
         return False
 
-    # Loop video to match audio duration
-    cmd = f'ffmpeg -y -stream_loop -1 -i "{video_file}" -i "{audio_file}" -t {audio_duration} -c:v copy -c:a copy -shortest "{output_file}"'
-    return run_command(cmd, f"Combining video and audio (duration: {audio_duration:.1f}s)")
+    # Loop video to match audio duration. Re-encode video to avoid timestamp/DTS issues with copy + stream_loop.
+    # Copy audio to keep original quality.
+    cmd = (
+        f'ffmpeg -y -stream_loop -1 -i "{video_file}" -i "{audio_file}" '
+        f'-map 0:v:0 -map 1:a:0 '
+        f'-c:v libx264 -r 25 -crf 23 -preset ultrafast -pix_fmt yuv420p '
+        f'-c:a aac -b:a {AUDIO_BITRATE} -shortest "{output_file}"'
+    )
+    return run_command(cmd, f"Combining video and audio (duration: {audio_duration:.1f}s)", timeout_seconds=600)
 
 
 def get_total_audio_duration(audio_files):

@@ -1,7 +1,20 @@
 #!/usr/bin/env python3
 """
-Video processing for the VRChat Slideshow Maker
+Video processing facade for the VRChat Slideshow Maker.
+
+Thin module that re-exports implementations from:
+- video_fixed.py
+- video_transitions.py
+- video_chunked.py
 """
+from __future__ import annotations
+
+from .video_chunked import get_encoding_params, create_slideshow, create_slideshow_chunked
+from .video_fixed import create_slideshow_with_durations
+from .video_transitions import create_beat_aligned_with_transitions
+
+# Public API stays the same via re-exports
+
 
 import os
 import tempfile
@@ -725,8 +738,8 @@ def create_beat_aligned_with_transitions(
                     f"drawbox=x=(iw/2-5):y=0:w=10:h=ih:color=red@1.0:t=fill:enable='between(t,{tt:.3f},{(tt+marker_duration):.3f})'"
                 )
 
-        # Beat tick markers (white), drawn after to appear on top
-        if (mark_transitions or overlay_beats) and marker_duration > 0:
+        # Beat tick markers (white), only when explicitly requested
+        if mark_transitions and marker_duration > 0:
             for tt in overlay_times:
                 draw_parts.append(
                     f"drawbox=x=(iw/2-5):y=0:w=10:h=ih:color=white@1.0:t=fill:enable='between(t,{tt:.3f},{(tt+marker_duration):.3f})'"
@@ -974,8 +987,17 @@ def create_slideshow_chunked(images, output_file, min_duration=DEFAULT_MIN_DURAT
                     curr_clip = temp_clips[j]
                     transition_file = f"{temp_dir}/transition_{chunk_idx}_{j}.mp4"
 
-                    # RANDOMLY SELECT TRANSITION TYPES for maximum variety!
-                    transition_type = random.choice(available_transitions)
+                    # RANDOMLY SELECT TRANSITION TYPES for maximum variety, but ensure ffmpeg supports it
+                    candidates = available_transitions[:]
+                    random.shuffle(candidates)
+                    transition_type = None
+                    for cand in candidates:
+                        test_cmd = f'ffmpeg -v error -f lavfi -i "color=red:size=320x240:duration=2" -f lavfi -i "color=blue:size=320x240:duration=2" -filter_complex "[0:v][1:v]xfade=transition={cand}:duration=1.0:offset=1.0" -t 1 -f null -'
+                        if run_command(test_cmd, f"    Probe transition {cand}", show_output=False):
+                            transition_type = cand
+                            break
+                    if transition_type is None:
+                        transition_type = 'fade'
 
                     # Use DRAMATIC transition - 1 second duration so it's UNMISSABLE
                     # ADD TEXT OVERLAY TO SHOW WHICH TRANSITION IS BEING USED!
@@ -1028,7 +1050,10 @@ def create_slideshow_chunked(images, output_file, min_duration=DEFAULT_MIN_DURAT
                         os.remove(clip)
                     except:
                         pass
-                os.remove(concat_file)
+                try:
+                    os.remove(concat_file)
+                except Exception:
+                    pass
 
             # Clean up original temp clips
             for clip in temp_clips:

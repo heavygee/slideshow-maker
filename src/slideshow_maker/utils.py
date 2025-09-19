@@ -238,6 +238,9 @@ def get_available_transitions():
 
 def detect_nvenc_support():
     """Detect if NVENC hardware encoding is available"""
+    # Allow explicit override to force CPU-only encoding
+    if os.environ.get("SSM_DISABLE_NVENC"):
+        return False
     # Avoid probing during unit tests to prevent external calls
     if os.environ.get("PYTEST_CURRENT_TEST"):
         return False
